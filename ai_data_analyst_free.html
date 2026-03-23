@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataMind Free — AI Analyst</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a26;
+    --border: #2a2a3d;
+    --accent: #4285f4;
+    --accent2: #34a853;
+    --accent3: #ea4335;
+    --accent4: #fbbc04;
+    --text: #e8e8f0;
+    --muted: #6a6a85;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); min-height: 100vh; overflow-x: hidden; }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(66,133,244,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(66,133,244,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo { font-family: var(--display); font-size: 20px; font-weight: 800; }
+  .logo span { color: var(--accent); }
+  .logo small { font-size: 11px; color: var(--accent2); margin-left: 8px; font-family: var(--mono); font-weight: 400; border: 1px solid var(--accent2); padding: 2px 8px; border-radius: 100px; }
+
+  .gemini-badge {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .g-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse 2s infinite; }
+  .g-dot.b { background: #4285f4; }
+  .g-dot.g { background: #34a853; animation-delay: 0.3s; }
+  .g-dot.y { background: #fbbc04; animation-delay: 0.6s; }
+  .g-dot.r { background: #ea4335; animation-delay: 0.9s; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    height: calc(100vh - 57px);
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+
+  .section-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+  /* API Key area */
+  .api-box {
+    background: rgba(66,133,244,0.08);
+    border: 1px solid rgba(66,133,244,0.25);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 11px;
+    color: var(--accent);
+    line-height: 1.6;
+  }
+  .api-box a { color: var(--accent); }
+  .api-row { display: flex; gap: 6px; margin-top: 8px; }
+  .api-input {
+    flex: 1; background: var(--bg); border: 1px solid rgba(66,133,244,0.3);
+    border-radius: 4px; padding: 6px 10px; color: var(--text);
+    font-family: var(--mono); font-size: 11px; outline: none;
+  }
+  .api-btn {
+    background: var(--accent); border: none; border-radius: 4px;
+    padding: 6px 12px; color: #fff; font-family: var(--mono); font-size: 11px; cursor: pointer;
+  }
+  .api-saved { font-size: 11px; color: var(--accent2); display: flex; align-items: center; gap: 6px; }
+
+  /* Model selector */
+  .model-select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; color: var(--text);
+    font-family: var(--mono); font-size: 11px; outline: none; cursor: pointer;
+  }
+  .model-hint { font-size: 10px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
+  /* Upload */
+  .upload-zone {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 20px 14px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: var(--surface); position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(66,133,244,0.05); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 24px; margin-bottom: 6px; }
+  .upload-text { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .upload-text strong { color: var(--accent); display: block; margin-bottom: 3px; font-size: 12px; }
+
+  .data-info { background: var(--surface2); border-radius: 8px; padding: 10px; font-size: 11px; display: none; margin-top: 10px; }
+  .data-info.visible { display: block; }
+  .filename { color: var(--accent2); font-weight: 700; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-row { display: flex; justify-content: space-between; color: var(--muted); margin-top: 3px; }
+  .stat-row span:last-child { color: var(--text); }
+  .col-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
+  .col-tag { font-size: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; color: var(--muted); }
+  .col-tag.num { border-color: var(--accent); color: var(--accent); }
+
+  /* Quick buttons */
+  .quick-list { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .qbtn {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 9px 11px; color: var(--text); font-family: var(--mono);
+    font-size: 11px; text-align: left; cursor: pointer; margin-bottom: 5px;
+    transition: all 0.15s; display: flex; align-items: center; gap: 8px;
+  }
+  .qbtn:hover { border-color: var(--accent); background: rgba(66,133,244,0.06); color: var(--accent); }
+  .qbtn .ic { font-size: 13px; flex-shrink: 0; }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  .chart-area {
+    padding: 16px 22px; border-bottom: 1px solid var(--border);
+    background: var(--surface); display: none; min-height: 250px;
+  }
+  .chart-area.visible { display: block; }
+  .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .chart-title { font-family: var(--display); font-size: 13px; font-weight: 700; }
+  .chart-btns { display: flex; gap: 5px; }
+  .cbtn {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 9px; font-family: var(--mono); font-size: 10px; color: var(--muted); cursor: pointer; transition: all 0.15s;
+  }
+  .cbtn.active, .cbtn:hover { border-color: var(--accent); color: var(--accent); }
+  #chartCanvas { max-height: 180px; }
+
+  .chat-area { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; color: var(--muted); padding: 40px; }
+  .empty-icon { font-size: 44px; opacity: 0.35; }
+  .empty-title { font-family: var(--display); font-size: 18px; font-weight: 700; color: var(--text); opacity: 0.4; }
+  .empty-sub { font-size: 11px; line-height: 1.6; max-width: 260px; }
+
+  .msg { display: flex; gap: 10px; animation: fadeUp 0.25s ease; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .msg.user { flex-direction: row-reverse; }
+
+  .avatar { width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .msg.user .avatar { background: var(--accent); }
+  .msg.ai .avatar { background: var(--surface2); border: 1px solid var(--border); }
+
+  .bubble {
+    max-width: 78%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; font-size: 12px; line-height: 1.75;
+  }
+  .msg.user .bubble { background: rgba(66,133,244,0.12); border-color: rgba(66,133,244,0.3); }
+
+  .insight-block {
+    background: rgba(52,168,83,0.06); border: 1px solid rgba(52,168,83,0.25);
+    border-radius: 6px; padding: 9px 11px; margin-top: 9px; font-size: 11px;
+  }
+  .insight-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent2); margin-bottom: 5px; }
+
+  .sql-block {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 9px 11px; margin-top: 6px; font-size: 11px; font-family: var(--mono);
+    color: #a78bfa; white-space: pre-wrap; overflow-x: auto;
+  }
+  .sql-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-top: 9px; margin-bottom: 4px; }
+
+  .thinking { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+  .thinking span { width: 6px; height: 6px; border-radius: 50%; animation: bounce 1.2s infinite; }
+  .thinking span:nth-child(1) { background: #4285f4; }
+  .thinking span:nth-child(2) { background: #34a853; animation-delay: 0.2s; }
+  .thinking span:nth-child(3) { background: #fbbc04; animation-delay: 0.4s; }
+  .thinking span:nth-child(4) { background: #ea4335; animation-delay: 0.6s; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+
+  .input-bar {
+    padding: 14px 22px; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; gap: 9px; align-items: flex-end;
+  }
+  .input-wrap {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; display: flex; align-items: center; padding: 9px 13px; transition: border-color 0.2s;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+  textarea { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: var(--mono); font-size: 12px; resize: none; max-height: 120px; line-height: 1.5; }
+  textarea::placeholder { color: var(--muted); }
+  .send-btn {
+    background: var(--accent); border: none; border-radius: 6px; width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 16px; transition: all 0.15s; flex-shrink: 0; color: #fff; font-weight: bold;
+  }
+  .send-btn:hover { background: #5a9cf5; transform: scale(1.05); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Data<span>Mind</span> <small>FREE</small></div>
+  <div class="gemini-badge">
+    <span class="g-dot b"></span>
+    <span class="g-dot g"></span>
+    <span class="g-dot y"></span>
+    <span class="g-dot r"></span>
+    Powered by Google Gemini
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+
+    <!-- API Key -->
+    <div class="sidebar-section">
+      <div class="section-label">Gemini API Key (Free)</div>
+      <div id="apiArea">
+        <div class="api-box">
+          <strong>100% gratuit</strong> — fără card bancar.<br>
+          Obține cheia de la <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
+          <div class="api-row">
+            <input class="api-input" type="password" id="apiField" placeholder="AIza...">
+            <button class="api-btn" onclick="saveKey()">Salvează</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model -->
+    <div class="sidebar-section">
+      <div class="section-label">Model</div>
+      <select class="model-select" id="modelSelect">
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash — 10 req/min, 250/zi</option>
+        <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash-Lite — 15 req/min, 1000/zi</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro — 5 req/min, 100/zi (cel mai bun)</option>
+      </select>
+      <div class="model-hint">Flash-Lite = cel mai generos gratuit. Pro = cel mai inteligent.</div>
+    </div>
+
+    <!-- Upload -->
+    <div class="sidebar-section">
+      <div class="section-label">Date</div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".csv,.tsv,.xlsx,.xls">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">
+          <strong>CSV sau Excel</strong>
+          trage sau click pentru upload
+        </div>
+      </div>
+      <div class="data-info" id="dataInfo">
+        <div class="filename" id="fileName"></div>
+        <div class="stat-row"><span>Rânduri</span><span id="rowCount">—</span></div>
+        <div class="stat-row"><span>Coloane</span><span id="colCount">—</span></div>
+        <div class="col-tags" id="colTags"></div>
+      </div>
+    </div>
+
+    <!-- Quick prompts -->
+    <div class="sidebar-section" style="padding-bottom:10px"><div class="section-label">Analiză rapidă</div></div>
+    <div class="quick-list">
+      <button class="qbtn" onclick="quick('Arată-mi principalele tendințe din aceste date')"><span class="ic">📈</span> Tendințe principale</button>
+      <button class="qbtn" onclick="quick('Dă-mi un rezumat statistic al tuturor coloanelor numerice')"><span class="ic">📊</span> Rezumat statistic</button>
+      <button class="qbtn" onclick="quick('Care sunt cele mai importante insight-uri din acest dataset?')"><span class="ic">💡</span> Insight-uri cheie</button>
+      <button class="qbtn" onclick="quick('Identifică anomalii sau valori aberante în date')"><span class="ic">🔍</span> Anomalii</button>
+      <button class="qbtn" onclick="quick('Generează un query SQL pentru top 10 înregistrări după metrica principală')"><span class="ic">🗄️</span> Generează SQL</button>
+      <button class="qbtn" onclick="quick('Generează cod Pandas Python pentru a analiza acest dataset')"><span class="ic">🐍</span> Cod Pandas</button>
+      <button class="qbtn" onclick="quick('Ce corelații există între coloane?')"><span class="ic">🔗</span> Corelații</button>
+      <button class="qbtn" onclick="quick('Prezice tendința pentru perioada următoare bazat pe datele existente')"><span class="ic">🔮</span> Prognoză</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Chart -->
+    <div class="chart-area" id="chartArea">
+      <div class="chart-header">
+        <div class="chart-title" id="chartTitle">Vizualizare date</div>
+        <div class="chart-btns">
+          <button class="cbtn active" id="bBar" onclick="switchChart('bar',this)">Bar</button>
+          <button class="cbtn" id="bLine" onclick="switchChart('line',this)">Line</button>
+          <button class="cbtn" id="bPie" onclick="switchChart('pie',this)">Pie</button>
+        </div>
+      </div>
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-area" id="chatArea">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">🧠</div>
+        <div class="empty-title">DataMind Free</div>
+        <div class="empty-sub">Obține cheia Gemini gratuită, încarcă un fișier CSV/Excel și pune orice întrebare despre date.</div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-bar">
+      <div class="input-wrap">
+        <textarea id="msgInput" placeholder="Întreabă orice despre datele tale…" rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="send-btn" id="sendBtn" onclick="send()" title="Trimite">↑</button>
+    </div>
+  </main>
+</div>
+
+<script>
+let csvData = null, csvHeaders = [], chartInstance = null;
+let chartType = 'bar', lastChart = null;
+let apiKey = '', history = [];
+
+// Upload
+const uz = document.getElementById('uploadZone');
+const fi = document.getElementById('fileInput');
+uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('drag'); });
+uz.addEventListener('dragleave', () => uz.classList.remove('drag'));
+uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('drag'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+fi.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (json.length) {
+        csvData = json;
+        csvHeaders = Object.keys(json[0]);
+        showInfo(file.name);
+        addSys('✅ <strong>' + esc(file.name) + '</strong> încărcat — ' + csvData.length.toLocaleString() + ' rânduri, ' + csvHeaders.length + ' coloane.');
+        autoChart();
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = e => {
+      Papa.parse(e.target.result, {
+        header: true, skipEmptyLines: true,
+        complete: r => {
+          csvData = r.data; csvHeaders = r.meta.fields || [];
+          showInfo(file.name);
+          addSys('✅ <strong>' + esc(file.name) + '</strong> încărcat — ' + csvData.length.toLocaleString() + ' rânduri, ' + csvHeaders.length + ' coloane.');
+          autoChart();
+        }
+      });
+    };
+    reader.readAsText(file);
+  }
+}
+
+function showInfo(name) {
+  document.getElementById('fileName').textContent = name;
+  document.getElementById('rowCount').textContent = csvData.length.toLocaleString();
+  document.getElementById('colCount').textContent = csvHeaders.length;
+  const tags = document.getElementById('colTags');
+  tags.innerHTML = '';
+  csvHeaders.forEach(h => {
+    const t = document.createElement('div');
+    const isNum = csvData.slice(0,5).some(r => !isNaN(parseFloat(r[h])));
+    t.className = 'col-tag' + (isNum ? ' num' : '');
+    t.textContent = h;
+    tags.appendChild(t);
+  });
+  document.getElementById('dataInfo').classList.add('visible');
+}
+
+function autoChart() {
+  if (!csvData?.length) return;
+  const num = csvHeaders.filter(h => csvData.slice(0,10).filter(r => !isNaN(parseFloat(r[h]))).length > 3);
+  const lbl = csvHeaders.find(h => !num.includes(h)) || csvHeaders[0];
+  if (!num.length) return;
+  const sl = csvData.slice(0, 12);
+  renderChart(sl.map(r => String(r[lbl]||'').slice(0,18)), sl.map(r => parseFloat(r[num[0]])||0), num[0], lbl);
+}
+
+function renderChart(labels, values, vl, ll) {
+  document.getElementById('chartArea').classList.add('visible');
+  document.getElementById('chartTitle').textContent = vl + ' by ' + ll;
+  lastChart = { labels, values, vl, ll };
+  if (chartInstance) chartInstance.destroy();
+  const ctx = document.getElementById('chartCanvas').getContext('2d');
+  const cols = values.map((_,i) => ['#4285f4','#34a853','#fbbc04','#ea4335','#a78bfa','#06b6d4'][i%6]);
+  chartInstance = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels,
+      datasets: [{
+        label: vl, data: values,
+        backgroundColor: chartType==='line' ? 'rgba(66,133,244,0.12)' : cols,
+        borderColor: chartType==='line' ? '#4285f4' : cols,
+        borderWidth: 2, fill: chartType==='line', tension: 0.4,
+        pointBackgroundColor: '#4285f4', pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1a26', borderColor: '#2a2a3d', borderWidth: 1,
+          titleColor: '#4285f4', bodyColor: '#e8e8f0',
+          titleFont: { family: "'Space Mono'" }, bodyFont: { family: "'Space Mono'" }
+        }
+      },
+      scales: chartType!=='pie' ? {
+        x: { ticks:{color:'#6a6a85',font:{family:"'Space Mono'",size:10}}, grid:{color:'#1a1a26'} },
+        y: { ticks:{color:'#6a6a85',font:{family:"'Space Mono'",size:10}}, grid:{color:'#1a1a26'} }
+      } : {}
+    }
+  });
+}
+
+function switchChart(type, btn) {
+  chartType = type;
+  document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (lastChart) renderChart(lastChart.labels, lastChart.values, lastChart.vl, lastChart.ll);
+}
+
+// Chat
+function clearEmpty() { const e = document.getElementById('emptyState'); if (e) e.remove(); }
+
+function addSys(html) {
+  clearEmpty();
+  const c = document.getElementById('chatArea');
+  const d = document.createElement('div');
+  d.className = 'msg ai';
+  d.innerHTML = '<div class="avatar">🤖</div><div class="bubble">' + html + '</div>';
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+function addUser(text) {
+  clearEmpty();
+  const c = document.getElementById('chatArea');
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = '<div class="avatar">👤</div><div class="bubble">' + esc(text) + '</div>';
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+function addThink() {
+  const c = document.getElementById('chatArea');
+  const d = document.createElement('div');
+  d.className = 'msg ai'; d.id = 'think';
+  d.innerHTML = '<div class="avatar">🤖</div><div class="bubble"><div class="thinking"><span></span><span></span><span></span><span></span></div></div>';
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+function rmThink() { const t = document.getElementById('think'); if(t) t.remove(); }
+
+function addAI(raw) {
+  const sqlM = raw.match(/```(?:sql|SQL)\n?([\s\S]*?)```/);
+  const pyM = raw.match(/```(?:python|py)\n?([\s\S]*?)```/);
+  const insM = raw.match(/\[INSIGHT\]([\s\S]*?)\[\/INSIGHT\]/i);
+  let main = raw.replace(/```[\s\S]*?```/g,'').replace(/\[INSIGHT\][\s\S]*?\[\/INSIGHT\]/gi,'').trim();
+  let html = md(main);
+  if (insM) html += '<div class="insight-block"><div class="insight-label">💡 Insight cheie</div>' + md(insM[1].trim()) + '</div>';
+  if (sqlM) html += '<div class="sql-label">SQL generat</div><div class="sql-block">' + esc(sqlM[1].trim()) + '</div>';
+  if (pyM) html += '<div class="sql-label">Cod Pandas</div><div class="sql-block">' + esc(pyM[1].trim()) + '</div>';
+  const c = document.getElementById('chatArea');
+  const d = document.createElement('div');
+  d.className = 'msg ai';
+  d.innerHTML = '<div class="avatar">🤖</div><div class="bubble">' + html + '</div>';
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+// Key
+function saveKey() {
+  const v = document.getElementById('apiField').value.trim();
+  if (!v.startsWith('AIza')) { alert('Cheia Gemini ar trebui să înceapă cu "AIza..."'); return; }
+  apiKey = v;
+  document.getElementById('apiArea').innerHTML = '<div class="api-saved">✓ Cheie Gemini salvată</div>';
+  addSys('✅ Cheie Gemini activă! Încarcă un fișier și pune întrebări.');
+}
+
+// Send
+async function send() {
+  const inp = document.getElementById('msgInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  if (!apiKey) { addSys('⚠️ Introdu mai întâi cheia Gemini în bara laterală. Este gratuită pe <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>'); return; }
+
+  inp.value = ''; autoResize(inp);
+  document.getElementById('sendBtn').disabled = true;
+  addUser(text); addThink();
+
+  let dataCtx = '';
+  if (csvData?.length) {
+    const sample = csvData.slice(0, 40);
+    const lines = [csvHeaders.join(','), ...sample.map(r => csvHeaders.map(h => r[h]??'').join(','))];
+    dataCtx = '\n\nDATASET (' + csvData.length + ' rânduri totale, primele ' + sample.length + '):\n```\n' + lines.join('\n') + '\n```';
+  }
+
+  const systemPrompt = `Ești DataMind, un expert analist de date AI. Analizezi datele clar, cu numere specifice.
+- Marchează cel mai important insight cu [INSIGHT]...[/INSIGHT]
+- Pune query-urile SQL în blocuri \`\`\`sql ... \`\`\`
+- Pune codul Python/Pandas în blocuri \`\`\`python ... \`\`\`
+- Folosește markdown (bold, liste) pentru claritate
+- Fii concis și specific cu cifre reale din date
+${dataCtx ? 'Datele utilizatorului:' + dataCtx : 'Nu s-au încărcat date. Cere utilizatorului să încarce un fișier CSV sau Excel.'}`;
+
+  const model = document.getElementById('modelSelect').value;
+  history.push({ role: 'user', parts: [{ text }] });
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: history,
+          generationConfig: { maxOutputTokens: 1200, temperature: 0.4 }
+        })
+      }
+    );
+    const data = await res.json();
+    rmThink();
+
+    if (data.error) {
+      addSys('❌ Eroare API Gemini: ' + esc(data.error.message));
+      history.pop();
+    } else {
+      const reply = data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('') || '_(fără răspuns)_';
+      history.push({ role: 'model', parts: [{ text: reply }] });
+      addAI(reply);
+      if (/chart|grafic|vizual|trend/i.test(text)) autoChart();
+    }
+  } catch(err) {
+    rmThink();
+    addSys('❌ Cerere eșuată: ' + esc(err.message));
+    history.pop();
+  }
+  document.getElementById('sendBtn').disabled = false;
+}
+
+function quick(t) {
+  if (!csvData) { uz.style.borderColor='var(--accent3)'; setTimeout(()=>uz.style.borderColor='',1500); addSys('⚠️ Încarcă mai întâi un fișier CSV sau Excel.'); return; }
+  document.getElementById('msgInput').value = t; send();
+}
+
+function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function md(t) {
+  return t
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code style="background:rgba(66,133,244,0.12);padding:1px 5px;border-radius:3px;font-size:10px;color:#4285f4">$1</code>')
+    .replace(/^#{1,3}\s(.+)$/gm,'<strong style="display:block;margin:7px 0 3px;color:#4285f4">$1</strong>')
+    .replace(/^- (.+)$/gm,'<div style="padding-left:10px;margin:2px 0">• $1</div>')
+    .replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+}
+</script>
+</body>
+</html>
